@@ -18,7 +18,7 @@
 # You can create any custom variable you would like, and they will be accessible
 # in the templates via {{ site.myvariable }}.
 
-title: a anatomy of software bug hunting & exploitation
+title: Anatomy of software bug hunting & exploitation
 email: sjh21a@gmail.com
 description: >- # this means to ignore newlines until "baseurl:"
   Write an awesome description for your new site here. You can edit this
@@ -26,11 +26,12 @@ description: >- # this means to ignore newlines until "baseurl:"
   Google search results) and in your feed.xml site description.
 baseurl: "" # the subpath of your site, e.g. /blog
 url: "" # the base hostname & protocol for your site, e.g. http://example.com
-twitter_username: jekyllrb
-github_username:  jekyll
+twitter_username: sjh21a
+github_username:  singi
 
 # Build settings
-theme: minima
+remote_theme: mmistakes/so-simple-theme
+theme: mmistakes/so-simple-theme
 plugins:
   - jekyll-feed
 
