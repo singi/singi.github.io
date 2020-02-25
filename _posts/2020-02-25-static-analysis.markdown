@@ -12,7 +12,7 @@ categories: clang static analysis bughunting
 
 우선, clang-analyzer에 대한 간략한 정의는 다음과 같다.
 
-```
+```plaintext
 The Clang Static Analyzer is a source code analysis tool that finds bugs in C, C++, and Objective-C programs.
 ```
 
