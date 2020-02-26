@@ -18,10 +18,21 @@ categories: clang static analysis bughunting
 
 * https://github.com/llvm-mirror/clang/tree/master/lib/StaticAnalyzer
 
-- AST Matcher AST
-- clang analyzer 원리
+clang-analyzer는 clang의 도구로써 기본 설치 되어 있지 않다. 따라서 사용하기 위해서는 직접 컴파일하거나 바이너리를 다운로드 받아 설치 해야 한다.
+
+## clang-analyzer는 어떤 방법으로 static analyzer를 수행하는 것인가?
+
+간단히 말하자면, source code를 컴파일 할 때 AST syntax을 추출하고, 이 AST syntax를 토대로 미리 정의된(또는 정의할) bug type pattern이 있는지 검색한다. 만약 존재한다면, 이를 reporting 하는 것이다. 우선, source code를 컴파일 할 때 ast가 어떤 식으로 사용되는지 보도록 하자.  다음은 테스트 프로그램과 AST node를 출력한 결과이다.
+
+```c
+```
 - 
 간략하게 clang-analyzer와 기본 checker를 사용해 보도록 하자.
 
 - 간단 프로그램
 - 스마트 포인터 예제
+
+
+## Reference
+- https://chromium.googlesource.com/chromium/src.git/+/master/docs/clang_static_analyzer.md
+- https://www.youtube.com/watch?v=UcxF6CVueDM
