@@ -126,7 +126,8 @@ int main()
 
 위 결과에서 `FunctionDecl`, `CompoundStmt`, `DeclStmt` 등을 AST Node라 한다. 그리고 뒤에 부가적인 정보가 따라온다. <데이터 타입, 문자열, 함수 이름, ...>
 
-clang-analyzer는 컴파일 시, 위 AST Node를 객체화 한 후, ~~~~
+clang static analyzer는 컴파일 시 AST Node를 추출/객체화 한 후, check 과정을 추가 한 것이다. 우리가 할 일은 이 check 과정에서 AST Node를 기반으로 한 `bug type pattern`을 만들어 제공하는 것이다.
+
 - checker 예제 division by zero, stack over flow, ..
 - 스마트 포인터 예제
 
