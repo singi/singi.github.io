@@ -8,7 +8,9 @@ categories: clang static analysis bughunting
 ## 어색한 오랜만의 포스팅...
 
 공개적인 곳에 포스팅은 굉장히 오랜만이다. 그래서 도입 부분이 굉장히 어색하다..
-오늘 이야기해 볼 것은 `Static Code Analysis`이다.  나의 경우에는 버그헌팅에 대한 방법을 다양하게 알아 보던 중 접하게 되었다. 기존에는 주로 무작위 및 code coverage 기반 fuzzing과 code audit을 통해 취약점을 찾았었는데, Chrome IPC 1day 분석 중 CodeQL이란 `Static Code Analysis` 도구에 대한 정보고 들었고, fuzzer 또한 정적 분석 맞춰 발전하는 것 같아 공부해 보았다.
+오늘 이야기해 볼 것은 `Static Code Analysis`이다.  나의 경우에는 버그헌팅에 대한 방법을 다양하게 알아 보던 중 접하게 되었다. 기존에는 주로 무작위 및 code coverage 기반 fuzzing과 code audit을 통해 취약점을 찾았었는데, Chrome IPC 1day 분석 중 CodeQL이란 `Static Code Analysis` 도구에 대한 정보고 들었고, fuzzer 또한 정적 분석 맞춰 발전하는 것 같아 공부해 보았다. 
+
+**하지만 주관적인 생각으로는 아직까지 clang의 `Static Analyzer`는 bug hunting용도로는 많이 부족하다. 그 이유에 대해서는 뒤에 언급 한다.**
 
 많은 Static Code Analysis 도구들이 있지만(CodeQL!), 지금은 `clang analyzer`을 알아보고 그리고 실제 `checker`를 만들어 보는 것으로 마치려 한다.
 
@@ -86,9 +88,9 @@ int main(int argc, char *argv[])
 ```
 간략히, `scan-build <make command>`를 사용하면 된다. 그런데 여기서 잠깐, 주석 `[1]`의 a/0을 **a/y**로 변경하면 어떻게 될까? (...버그는 있지만 못 잡는다. 이유는 뒷 부분에 설명한다.)
 
-## clang analyzer는 어떤 방법으로 static analyzer를 수행하는 것인가?
+## clang static analyzer는 어떤 방법으로 정적 코드 분석을 수행할까?
 
-간단히 말하면, source code를 컴파일 할 때 AST(`Abstract Syntax Tree`) Node을 추출하고, 이 AST Node의 형태가 미리 정의된(또는 정의 할) `bug type pattern`이 있는지 검색한다. 만약 존재한다면 이를 `reporting` 한다. 우선, source code를 컴파일 할 때 AST가 어떤 식으로 출력 되는지 확인해보도록 하자.  
+간단히 말하면, source code를 컴파일 할 때 AST(`Abstract Syntax Tree`) Node을 추출하고, 이 AST Node의 형태가 미리 정의된(또는 정의 할) `bug type pattern`이 있는지 검색한다. 만약 `bug type pattern`이 존재한다면 이를 `reporting` 한다. 우선, source code를 컴파일 할 때 AST가 어떤 식으로 출력 되는지 확인해보도록 하자.  
 
 다음은 테스트 프로그램과 AST node를 출력한 결과이다.
 
@@ -125,6 +127,7 @@ int main()
 위 결과에서 `FunctionDecl`, `CompoundStmt`, `DeclStmt` 등을 AST Node라 한다. 그리고 뒤에 부가적인 정보가 따라온다. <데이터 타입, 문자열, 함수 이름, ...>
 
 clang-analyzer는 컴파일 시, 위 AST Node를 객체화 한 후, ~~~~
+- checker 예제 division by zero, stack over flow, ..
 - 스마트 포인터 예제
 
 
