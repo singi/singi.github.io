@@ -10,21 +10,21 @@ categories: clang static analysis bughunting
 공개적인 곳에 포스팅은 굉장히 오랜만이다. 그래서 도입 부분이 굉장히 어색하다..
 오늘 이야기해 볼 것은 `Static Code Analysis`이다.  나의 경우에는 버그헌팅에 대한 방법을 다양하게 알아 보던 중 접하게 되었다. 기존에는 주로 무작위 및 code coverage 기반 fuzzing과 code audit을 통해 취약점을 찾았었는데, Chrome IPC 1day 분석 중 CodeQL이란 `Static Code Analysis` 도구에 대한 정보고 들었고, fuzzer 또한 정적 분석 맞춰 발전하는 것 같아 공부해 보았다. 
 
-**하지만 주관적인 생각으로는 아직까지 clang의 `Static Analyzer`는 bug hunting용도로는 많이 부족하다. 그 이유에 대해서는 뒤에 언급 한다.**
+**하지만 주관적인 생각으로는 아직까지 clang의 `Static Analyzer`는 bug hunting 용도로는 부족하다. 그 이유에 대해서는 뒤에 언급 한다.**
 
-많은 Static Code Analysis 도구들이 있지만(CodeQL!), 지금은 `clang analyzer`을 알아보고 그리고 실제 `checker`를 만들어 보는 것으로 마치려 한다.
+많은 Static Code Analysis 도구들이 있지만(CodeQL!), 지금은 `clang analyzer`을 알아보고 그리고 실제 `checker`를 만들어 보는걸 목표로 할 것이다.
 
 우선, `clang analyzer`에 대한 간략한 정의는 다음과 같다.
 
 **The Clang Static Analyzer is a source code analysis tool that finds bugs in C, C++, and Objective-C programs.**
 
-위에서 말한 것과 같이 clang-analyzer는 C, C++, Obj-C만 지원한다. 다행인 건, 내가 관심 있어 하는 버그 헌팅 대상은 주로 C,C++로 짜여져 있고 open source라는 점이다(!). 다음은 clang에서 지원하는 `static analyzer`에 대한 repository다.
+위에서 말한 것과 같이 clang analyzer는 C, C++, Obj-C만 지원한다. 다행인 건, 내가 관심 있어 하는 버그 헌팅 대상은 주로 C,C++로 짜여져 있고 open source라는 점이다(!). 다음은 clang에서 지원하는 `static analyzer`에 대한 repository다.
 
 * [https://github.com/llvm-mirror/clang/tree/master/lib/StaticAnalyzer](https://github.com/llvm-mirror/clang/tree/master/lib/StaticAnalyzer)
 
 (직관적인 디렉토리 이름에 반가운 마음으로 클릭했다가는 암호 수식과 유사한 c++ 클래스들의 웅장한 모습에 정신이 아찔해질 수도 있다.) 
 
-그럼, 이쯤에서 간략히 clang analyzer를 사용해 보도록 하자. 다음 프로그램은 누구나 알 수 있는 직관적인 버그를 가지고 있다. 바로 Divided by zero이다.
+그럼, 이쯤에서 간략히 clang analyzer를 사용해 보도록 하자. 다음 프로그램은 누구나 알 수 있는 직관적인 버그를 가지고 있다. 바로 Division by zero이다.
 
 ```c
 #include <stdio.h>
@@ -44,9 +44,9 @@ test.c:6:3: warning: Division by zero
 1 warning generated.
 singi@singi-VirtualBox:~$
 ```
-위 결과에서 볼 수 있듯이 division by zero 타입의 버그를 바로 찾아내었다. 하지만, 우리가 관심 있어 하는 대상은 보통 프로젝타 단위의 source code들이기 때문에 위처럼 1개 파일 대상 clang --analyze 옵션을 사용하는 것은 효율적이지 않다. 이런 경우에는 `scan-build`를 이용해야 한다.
+위 결과에서 볼 수 있듯이 Division by zero 타입의 버그를 바로 찾아내었다. 하지만, 우리가 관심 있어 하는 대상은 보통 프로젝트로 이루어져 있다. 따라서 위처럼 단일 파일 대상으로 clang --analyze 옵션을 사용하는 것은 효율적이지 않다. 이런 경우에는 `scan-build`를 이용해야 한다.
 
-`scan-build`는 clang의 도구로 `기본 설치 되어 있지 않다.`(clang 6.0/ubuntu 18.04 기준으로 default install X) 따라서 `scan-build`를 사용하기 위해서 직접 설치해 주어야 한다. 다음 명령으로 설치하면 된다.
+`scan-build`는 clang의 도구로 `기본 설치 되어 있지 않다.`(clang 6.0/ubuntu 18.04 기준으로 default install X) 따라서 `scan-build`를 사용하기 위해 직접 설치해 주어야 한다. 다음 명령으로 설치하면 된다.
 
 ```bash
 sudo apt install -y clang-tools
@@ -55,19 +55,23 @@ sudo apt install -y clang-tools
 위 명령이 성공적으로 실행되면, 머신 내에 `scan-build` 프로그램이 설치 되었을 것이다. `scan-build`의 간단한 사용법은 다음과 같다.
 
 ```bash
-singi@singi-VirtualBox:~/sa$ scan-build make
+singi@singi-VirtualBox:~/sa$ scan-build -o test2 make
 scan-build: Using '/usr/lib/llvm-6.0/bin/clang' for static analysis
-gcc -o test test.c
+/usr/share/clang/scan-build-6.0/bin/../libexec/ccc-analyzer -g -o test test.c
 test.c: In function ‘vuln1’:
-test.c:6:3: warning: division by zero [-Wdiv-by-zero]
-  a/0;
-   ^
+test.c:6:5: warning: division by zero [-Wdiv-by-zero]
+    a/0; //[1]
+     ^
 test.c: In function ‘main’:
-test.c:11:8: warning: implicit declaration of function ‘atoi’ [-Wimplicit-function-declaration]
-  vuln1(atoi(argv[1]));
-        ^~~~
-scan-build: Removing directory '/tmp/scan-build-2020-02-26-044559-23003-1' because it contains no reports.
-scan-build: No bugs found.
+test.c:11:10: warning: implicit declaration of function ‘atoi’ [-Wimplicit-function-declaration]
+    vuln1(atoi(argv[1]));
+          ^~~~
+test.c:6:5: warning: Division by zero
+   a/0; //[1]
+   ~^~
+1 warning generated.
+scan-build: 1 bug found.
+scan-build: Run 'scan-view /home/singi/sa/test2/2020-02-29-032210-8126-1' to examine bug reports.
 singi@singi-VirtualBox:~/sa$
 ```
 
@@ -86,11 +90,21 @@ int main(int argc, char *argv[])
    vuln1(atoi(argv[1]));
 }
 ```
-간략히, `scan-build <make command>`를 사용하면 된다. 그런데 여기서 잠깐, 주석 `[1]`의 a/0을 **a/y**로 변경하면 어떻게 될까? (...버그는 있지만 못 잡는다. 이유는 뒷 부분에 설명한다.)
+Makefile 구성이 약간 중요한데, 컴파일러는 **꼭!** $(CC) 형태로 사용해야 한다. 그냥 clang 경로를 적어준다면, scan-build는 어떠한 버그 리포트도 생성하지 않을 것이다.
+
+```plaintext
+CC=clang
+all:
+        $(CC) -g -o test test.c
+```
+
+간략히, `scan-build <make command>`를 사용하면 된다. 그런데 여기서 잠깐, 주석 `[1]`의 a/0을 **a/y**로 변경하면 어떻게 될까? 한번 해보자... 취약점이 될 가능성은 있지만 못 잡는다. 이유는 뒷 부분에 설명한다.
 
 ## clang static analyzer는 어떤 방법으로 정적 코드 분석을 수행할까?
 
-간단히 말하면, source code를 컴파일 할 때 AST(`Abstract Syntax Tree`) Node을 추출하고, 이 AST Node의 형태가 미리 정의된(또는 정의 할) `bug type pattern`이 있는지 검색한다. 만약 `bug type pattern`이 존재한다면 이를 `reporting` 한다. 우선, source code를 컴파일 할 때 AST가 어떤 식으로 출력 되는지 확인해보도록 하자.  
+간단히 말하면, source code를 컴파일 할 때 AST(`Abstract Syntax Tree`) Node을 추출하고, 이 AST Node의 형태가 미리 정의된(또는 정의 할) `bug type pattern`이 있는지 검색한다. 만약 `bug type pattern`이 존재한다면 이를 `reporting` 한다. 간단히 말하자면 static analyzer는 ***실행 가능한 경로를 trace 하는 소스 코드 시뮬레이터***다. 
+
+우선, source code를 컴파일 할 때 AST가 어떤 식으로 출력 되는지 확인해보도록 하자.  
 
 다음은 테스트 프로그램과 AST node를 출력한 결과이다.
 
@@ -126,11 +140,88 @@ int main()
 
 위 결과에서 `FunctionDecl`, `CompoundStmt`, `DeclStmt` 등을 AST Node라 한다. 그리고 뒤에 부가적인 정보가 따라온다. <데이터 타입, 문자열, 함수 이름, ...>
 
-clang static analyzer는 컴파일 시 AST Node를 추출/객체화 한 후, check 과정을 추가 한 것이다. 우리가 할 일은 이 check 과정에서 AST Node를 기반으로 한 `bug type pattern`을 만들어 제공하는 것이다.
+clang static analyzer는 컴파일 시 AST Node를 추출/객체화 한 후, check 과정을 추가 한 것이다. 우리가 할 일은 이 check 과정에서 AST Node를 기반으로 한 `bug type pattern`을 만들어 제공하는 것이다. 그럼 우선, checker 중 1개를 분석 해 보도록 하자.
 
-- checker 예제 division by zero, stack over flow, ..
-- 스마트 포인터 예제
+## Division by zero checker 분석
 
+해당 checker의 코드는 다음 git repository에서 확인할 수 있다.
+* https://github.com/llvm-mirror/clang/blob/master/lib/StaticAnalyzer/Checkers/DivZeroChecker.cpp
+
+모든 checker는 다음과 같은 코드로 chekcer로 등록될 수 있다.
+```c++
+void ento::registerDivZeroChecker(CheckerManager &mgr) {
+  mgr.registerChecker<DivZeroChecker>();
+}
+```
+
+이제 `DivZeroChecker` 클래스를 확인 해 보자.
+
+```c++
+class DivZeroChecker : public Checker< check::PreStmt<BinaryOperator> > {
+  mutable std::unique_ptr<BuiltinBug> BT;
+  void reportBug(const char *Msg, ProgramStateRef StateZero, CheckerContext &C,
+                 std::unique_ptr<BugReporterVisitor> Visitor = nullptr) const;
+
+public:
+  void checkPreStmt(const BinaryOperator *B, CheckerContext &C) const;
+};
+```
+
+`DivZeroChecker` 클래스에서 `reportBug`, `checkPreStmt` 메소드를 overide 하고 있다. `reportBug` 메소드는 `checkPreStmt` 메소드 안에서 bug type pattern이 나오면 user에게 report하는 용도로 사용된다. 따라서 중요한 메소드는 `checkPreStmt` 메소드가 된다. `checkPreStmt` 메소드는 check할 AST Node에 따라 다양한 AST Node Class를 arguments로 사용할 수 있다. AST Node Class에는 Statement, Exrepssion, Operator등이 포함된다. Division By zero checker의 경우, `BinaryOperator`를 사용했다. 다음은 `checkPreStmt` 메소드 코드다.
+
+```c++
+void DivZeroChecker::checkPreStmt(const BinaryOperator *B,
+                                  CheckerContext &C) const {
+  BinaryOperator::Opcode Op = B->getOpcode();
+  if (Op != BO_Div &&
+      Op != BO_Rem &&
+      Op != BO_DivAssign &&
+      Op != BO_RemAssign)
+    return;
+
+  if (!B->getRHS()->getType()->isScalarType())
+    return;
+
+  SVal Denom = C.getSVal(B->getRHS()); //[1]
+  Optional<DefinedSVal> DV = Denom.getAs<DefinedSVal>(); //[2]
+
+  // Divide-by-undefined handled in the generic checking for uses of
+  // undefined values.
+  if (!DV)
+    return;
+
+  // Check for divide by zero.
+  ConstraintManager &CM = C.getConstraintManager();
+  ProgramStateRef stateNotZero, stateZero; //[3]
+  std::tie(stateNotZero, stateZero) = CM.assumeDual(C.getState(), *DV); //[4]
+
+  if (!stateNotZero) {
+    assert(stateZero);
+    reportBug("Division by zero", stateZero, C);
+    return;
+  }
+
+  bool TaintedD = isTainted(C.getState(), *DV);
+  if ((stateNotZero && stateZero && TaintedD)) {
+    reportBug("Division by a tainted value, possibly zero", stateZero, C,
+              std::make_unique<taint::TaintBugVisitor>(*DV));
+    return;
+  }
+
+  // If we get here, then the denom should not be zero. We abandon the implicit
+  // zero denom case for now.
+  C.addTransition(stateNotZero);
+}
+```
+
+프로그램의 상태는 해당 AST Node의 변수와 표현식으로 구성되고 이것은 `ProgramState`로 나타낼 수 있다. 위 코드의 주석 `[1]`에서 BinaryOperator의 우변 값을 가져와 SVal(Symbolic Expression)로 변환한다. 그리고 주석 `[2]`에서 지정된 SVal 유형으로 변환한다. 여기서는 `DefinedSval` Type을 사용한다. 이 `DefinedSval` type은 True/False로 나타낼 수 있는 식을 뜻한다. 주석 `[3]`에서 `ProgramState`인 `stateNotZero`, `stateZero`를 선언한 후, 이 값들은 주석 `[4]`에서 `CM.assumeDual` 메소드의 반환값을 저장하는 용도로 사용된다. 그럼 주석 `[4]`가 Division by zero bug type pattern 여부를 판단하는 key logic이 된다는 걸 예감할 수 있다. `std::tie` 메소드가 생소할수도 있는데, 이는 C++에서 1개 이상의 메소드 리턴값을 받아올 때 사용한다. (만약, C++17 문법을 지원한다면, 간단하게 auto [x,y]로 표현할 수도 있었다.)
+
+`CheckerContext::getState`는 다음과 같이 구현 되어있다.
+
+`ConstraintManager::assumeDual`은 다음과 같이 구현 되어있다.
+
+- smart pointer / raw pointer 예제
+- 결론
 
 ## Reference
 - [https://chromium.googlesource.com/chromium/src.git/+/master/docs/clang_static_analyzer.md](https://chromium.googlesource.com/chromium/src.git/+/master/docs/clang_static_analyzer.md)
