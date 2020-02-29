@@ -140,7 +140,9 @@ int main()
 
 위 결과에서 `FunctionDecl`, `CompoundStmt`, `DeclStmt` 등을 AST Node라 한다. 그리고 뒤에 부가적인 정보가 따라온다. <데이터 타입, 문자열, 함수 이름, ...>
 
-clang static analyzer는 컴파일 시 AST Node를 추출/객체화 한 후, check 과정을 추가 한 것이다. 우리가 할 일은 이 check 과정에서 AST Node를 기반으로 한 `bug type pattern`을 만들어 제공하는 것이다. 그럼 우선, checker 중 1개를 분석 해 보도록 하자.
+clang static analyzer는 컴파일 시 AST Node를 추출/객체화 한 후, check 과정을 추가 한 것이다. 우리가 할 일은 이 check 과정에서 AST Node를 기반으로 한 `bug type pattern`을 만들어 제공하는 것이다. 
+
+그럼 우선, checker 중 1개를 분석 해 보도록 하자.
 
 ## Division by zero checker 분석
 
@@ -167,7 +169,13 @@ public:
 };
 ```
 
-`DivZeroChecker` 클래스에서 `reportBug`, `checkPreStmt` 메소드를 overide 하고 있다. `reportBug` 메소드는 `checkPreStmt` 메소드 안에서 bug type pattern이 나오면 user에게 report하는 용도로 사용된다. 따라서 중요한 메소드는 `checkPreStmt` 메소드가 된다. `checkPreStmt` 메소드는 check할 AST Node에 따라 다양한 AST Node Class를 arguments로 사용할 수 있다. AST Node Class에는 Statement, Exrepssion, Operator등이 포함된다. Division By zero checker의 경우, `BinaryOperator`를 사용했다. 다음은 `checkPreStmt` 메소드 코드다.
+`DivZeroChecker` 클래스에서 `reportBug`, `checkPreStmt` 메소드를 overide 하고 있다. 
+
+`reportBug` 메소드는 `checkPreStmt` 메소드 안에서 bug type pattern이 나오면 user에게 report하는 용도로 사용된다. 따라서 중요한 메소드는 `checkPreStmt` 메소드가 된다. 
+
+`checkPreStmt` 메소드는 check할 AST Node에 따라 다양한 AST Node Class를 arguments로 사용할 수 있다. 
+
+AST Node Class에는 Statement, Exrepssion, Operator등이 포함된다. Division By zero checker의 경우, `BinaryOperator`를 사용했다. 다음은 `checkPreStmt` 메소드 코드다.
 
 ```c++
 void DivZeroChecker::checkPreStmt(const BinaryOperator *B,
@@ -214,7 +222,15 @@ void DivZeroChecker::checkPreStmt(const BinaryOperator *B,
 }
 ```
 
-프로그램의 상태는 해당 AST Node의 변수와 표현식으로 구성되고 이것은 `ProgramState`로 나타낼 수 있다. 위 코드의 주석 `[1]`에서 BinaryOperator의 우변 값을 가져와 SVal(Symbolic Expression)로 변환한다. 그리고 주석 `[2]`에서 지정된 SVal 유형으로 변환한다. 여기서는 `DefinedSval` Type을 사용한다. 이 `DefinedSval` type은 True/False로 나타낼 수 있는 식을 뜻한다. 주석 `[3]`에서 `ProgramState`인 `stateNotZero`, `stateZero`를 선언한 후, 이 값들은 주석 `[4]`에서 `CM.assumeDual` 메소드의 반환값을 저장하는 용도로 사용된다. 그럼 주석 `[4]`가 Division by zero bug type pattern 여부를 판단하는 key logic이 된다는 걸 예감할 수 있다. `std::tie` 메소드가 생소할수도 있는데, 이는 C++에서 1개 이상의 메소드 리턴값을 받아올 때 사용한다. (만약, C++17 문법을 지원한다면, 간단하게 auto [x,y]로 표현할 수도 있었다.)
+프로그램의 상태는 해당 AST Node의 변수와 표현식으로 구성되고 이것은 `ProgramState`로 나타낼 수 있다. 
+
+위 코드의 주석 `[1]`에서 BinaryOperator의 우변 값을 가져와 SVal(Symbolic Expression)로 변환한다. 그리고 주석 `[2]`에서 지정된 SVal 유형으로 변환한다. 
+
+여기서는 `DefinedSval` Type을 사용한다. 이 `DefinedSval` type은 True/False로 나타낼 수 있는 식을 뜻한다. 
+
+주석 `[3]`에서 `ProgramState`인 `stateNotZero`, `stateZero`를 선언한 후, 이 값들은 주석 `[4]`에서 `CM.assumeDual` 메소드의 반환값을 저장하는 용도로 사용된다. 
+
+그럼 주석 `[4]`가 Division by zero bug type pattern 여부를 판단하는 key logic이 된다는 걸 예감할 수 있다. `std::tie` 메소드가 생소할수도 있는데, 이는 C++에서 1개 이상의 메소드 리턴값을 받아올 때 사용한다. (만약, C++17 문법을 지원한다면, 간단하게 auto [x,y]로 표현할 수도 있었다.)
 
 `CheckerContext::getState`는 다음과 같이 구현 되어있다.
 
