@@ -5,7 +5,7 @@ date:   2020-02-25 23:56:00 +0900
 categories: clang static analysis bughunting
 ---
 
-## 어색한 오랜만의 포스팅...
+### 어색한 오랜만의 포스팅...
 
 공개적인 곳에 포스팅은 굉장히 오랜만이다. 그래서 도입 부분이 굉장히 어색하다..
 오늘 이야기해 볼 것은 `Static Code Analysis`이다.  나의 경우에는 버그헌팅에 대한 방법을 다양하게 알아 보던 중 접하게 되었다. 기존에는 주로 무작위 및 code coverage 기반 fuzzing과 code audit을 통해 취약점을 찾았었는데, Chrome IPC 1day 분석 중 CodeQL이란 `Static Code Analysis` 도구에 대한 정보고 들었고, fuzzer 또한 정적 분석 맞춰 발전하는 것 같아 공부해 보았다. 
@@ -100,9 +100,9 @@ all:
 
 간략히, `scan-build <make command>`를 사용하면 된다. 그런데 여기서 잠깐, 주석 `[1]`의 a/0을 **a/y**로 변경하면 어떻게 될까? 한번 해보자... 취약점이 될 가능성은 있지만 못 잡는다. 이유는 뒷 부분에 설명한다.
 
-## clang static analyzer는 어떤 방법으로 정적 코드 분석을 수행할까?
+### clang static analyzer는 어떤 방법으로 정적 코드 분석을 수행할까?
 
-간단히 말하면, source code를 컴파일 할 때 AST(`Abstract Syntax Tree`) Node을 추출하고, 이 AST Node의 형태가 미리 정의된(또는 정의 할) `bug type pattern`이 있는지 검색한다. 만약 `bug type pattern`이 존재한다면 이를 `reporting` 한다. 간단히 말하자면 static analyzer는 ***실행 가능한 경로를 trace 하는 소스 코드 시뮬레이터***다. 
+source code를 컴파일 할 때 AST(`Abstract Syntax Tree`) Node을 추출하고, 이 AST Node의 형태가 미리 정의된(또는 정의 할) `bug type pattern`이 있는지 검색한다. 만약 `bug type pattern`이 존재한다면 이를 `reporting` 한다. 즉, static analyzer는 ***실행 가능한 경로를 trace 하는 소스 코드 시뮬레이터***다. 
 
 우선, source code를 컴파일 할 때 AST가 어떤 식으로 출력 되는지 확인해보도록 하자.  
 
@@ -140,11 +140,15 @@ int main()
 
 위 결과에서 `FunctionDecl`, `CompoundStmt`, `DeclStmt` 등을 AST Node라 한다. 그리고 뒤에 부가적인 정보가 따라온다. <데이터 타입, 문자열, 함수 이름, ...>
 
-clang static analyzer는 컴파일 시 AST Node를 추출/객체화 한 후, check 과정을 추가 한 것이다. 우리가 할 일은 이 check 과정에서 AST Node를 기반으로 한 `bug type pattern`을 만들어 제공하는 것이다. 
+clang static analyzer는 컴파일 시 AST Node를 추출/객체화 한 후, check 과정을 추가 한 것이다. 우리가 할 일은 이 check 과정에서 AST Node를 기반으로 한 `bug type pattern`을 만들어 제공하는 것이다.
+
+이것이 가능한 이유는 clang static analyzer는 symbolic execution을 수행하기 때문이다. 모든 입력값은 symbolic values로 표현되며 analyzer는 input symbol 및 program path에 기반하여 모든 가능한 경로 및 값을 추론한다. 
+
+실행된 경로의 추적은 Graph로 표시 되고, 각 Graph는 `ProgramPoint`, `ProgramState`로 표현된다. 이렇게 표현된 Graph는 새로운 statement가 수행 될 때 마다 추가/삭제/수정 된다.
 
 그럼 우선, checker 중 1개를 분석 해 보도록 하자.
 
-## Division by zero checker 분석
+### Division by zero checker 분석
 
 해당 checker의 코드는 다음 git repository에서 확인할 수 있다.
 * https://github.com/llvm-mirror/clang/blob/master/lib/StaticAnalyzer/Checkers/DivZeroChecker.cpp
@@ -175,7 +179,7 @@ public:
 
 `checkPreStmt` 메소드는 check할 AST Node에 따라 다양한 AST Node Class를 arguments로 사용할 수 있다. 
 
-AST Node Class에는 Statement, Exrepssion, Operator등이 포함된다. Division By zero checker의 경우, `BinaryOperator`를 사용했다. 다음은 `checkPreStmt` 메소드 코드다.
+AST Node Class에는 Statement, Exrepssion, Operator등이 포함된다. Division By zero checker의 경우, `BinaryOperator`를 사용했다. 다음은 `checkPreStmt` 메소드다.
 
 ```c++
 void DivZeroChecker::checkPreStmt(const BinaryOperator *B,
@@ -203,9 +207,9 @@ void DivZeroChecker::checkPreStmt(const BinaryOperator *B,
   ProgramStateRef stateNotZero, stateZero; //[3]
   std::tie(stateNotZero, stateZero) = CM.assumeDual(C.getState(), *DV); //[4]
 
-  if (!stateNotZero) {
+  if (!stateNotZero) { //[5]
     assert(stateZero);
-    reportBug("Division by zero", stateZero, C);
+    reportBug("Division by zero", stateZero, C); //[6]
     return;
   }
 
@@ -224,21 +228,66 @@ void DivZeroChecker::checkPreStmt(const BinaryOperator *B,
 
 프로그램의 상태는 해당 AST Node의 변수와 표현식으로 구성되고 이것은 `ProgramState`로 나타낼 수 있다. 
 
-위 코드의 주석 `[1]`에서 BinaryOperator의 우변 값을 가져와 SVal(Symbolic Expression)로 변환한다. 그리고 주석 `[2]`에서 지정된 SVal 유형으로 변환한다. 
+위 코드의 주석 `[1]`에서 BinaryOperator의 우변 값(a/0의 경우, 0)을 가져와 SVal(Symbolic Expression)로 변환한다. 그리고 주석 `[2]`에서 지정된 SVal 유형으로 변환한다. 
 
 여기서는 `DefinedSval` Type을 사용한다. 이 `DefinedSval` type은 True/False로 나타낼 수 있는 식을 뜻한다. 
 
-주석 `[3]`에서 `ProgramState`인 `stateNotZero`, `stateZero`를 선언한 후, 이 값들은 주석 `[4]`에서 `CM.assumeDual` 메소드의 반환값을 저장하는 용도로 사용된다. 
+주석 `[3]`에서 `ProgramState`인 `stateNotZero`, `stateZero`를 선언한다. 이 값들은 바로 다음 주석 `[4]`에서 `CM.assumeDual` 메소드의 반환값을 저장하는 용도로 사용된다. 
 
-그럼 주석 `[4]`가 Division by zero bug type pattern 여부를 판단하는 key logic이 된다는 걸 예감할 수 있다. `std::tie` 메소드가 생소할수도 있는데, 이는 C++에서 1개 이상의 메소드 리턴값을 받아올 때 사용한다. (만약, C++17 문법을 지원한다면, 간단하게 auto [x,y]로 표현할 수도 있었다.)
+그럼 주석 `[4]`가 Division by zero bug type pattern 여부를 판단하는 key logic이 된다는 걸 예감할 수 있다. `std::tie` 메소드가 생소할수도 있는데, 이는 C++에서 1개 이상의 메소드 리턴값을 받아올 때 사용한다. (만약, C++17 문법을 지원한다면, 간단하게 auto [x,y]로 표현할 수도 있다.)
 
 `CheckerContext::getState`는 다음과 같이 구현 되어있다.
+```c++
+const ProgramStateRef &getState() const { return Pred->getState(); }
+```
 
-`ConstraintManager::assumeDual`은 다음과 같이 구현 되어있다.
+위 메소드는 Graph의 State를 가져오는 간단한 메소드다. 다음으로 `ConstraintManager::assumeDual`은 다음과 같이 구현 되어있다.
 
-- smart pointer / raw pointer 예제
-- 결론
+```c++
+  ProgramStatePair assumeDual(ProgramStateRef State, DefinedSVal Cond) {
+    ProgramStateRef StTrue = assume(State, Cond, true);
 
-## Reference
+    // If StTrue is infeasible, asserting the falseness of Cond is unnecessary
+    // because the existing constraints already establish this.
+    if (!StTrue) {
+#ifndef __OPTIMIZE__
+      // This check is expensive and should be disabled even in Release+Asserts
+      // builds.
+      // FIXME: __OPTIMIZE__ is a GNU extension that Clang implements but MSVC
+      // does not. Is there a good equivalent there?
+      assert(assume(State, Cond, false) && "System is over constrained.");
+#endif
+      return ProgramStatePair((ProgramStateRef)nullptr, State);
+    }
+
+    ProgramStateRef StFalse = assume(State, Cond, false);
+    if (!StFalse) {
+      // We are careful to return the original state, /not/ StTrue,
+      // because we want to avoid having callers generate a new node
+      // in the ExplodedGraph.
+      return ProgramStatePair(State, (ProgramStateRef)nullptr);
+    }
+
+    return ProgramStatePair(StTrue, StFalse);
+  }
+```
+
+위 메소드는 방금 가져온 그래프 state와 평가해야 할 Condition(DefinedSVal)을 인자로 받는다. 만약 주석 [1],[2]에서 `a/0` statement의 우변 값(0)을 SVal 형식으로 만들었다면, `assume(State, Cond, true);` 메소드 반환값은 False가 된다.
+
+그리고는 주석 `[5]`에서 `stateNotZero`가 False라면 주석 `[6]`의 `reportbug` 메소드를 호출한다.
+
+
+
+### 결론?
+
+static analyzer를 통해서 0day 취약점을 찾을 수는 있다. 하지만 많은 배경지식을 요구한다. symbolic execution과 taint analyze는 기본적인 프로그램 분석 기술이라 다양한 곳에 적용 가능 해 배워둘 가치가 충분히 있다.
+
+하지만, clang static analyzer를 사용하기 위해서는 AST Node Class와 clang에서 구현한 symbolic execution 메소드의 사용법을 익혀야 한다.  이를 위해 여러 checker examples이 존재하지만, 너무 복잡하다.
+
+개인 취향의 문제이긴 하지만, 공부용 외에는 clang static analyzer를 실제로 0day bug hunting에 사용하진 않을 것 같다.
+
+
+
+### Reference
 - [https://chromium.googlesource.com/chromium/src.git/+/master/docs/clang_static_analyzer.md](https://chromium.googlesource.com/chromium/src.git/+/master/docs/clang_static_analyzer.md)
 - [https://www.youtube.com/watch?v=UcxF6CVueDM](https://www.youtube.com/watch?v=UcxF6CVueDM)
