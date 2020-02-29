@@ -276,16 +276,15 @@ const ProgramStateRef &getState() const { return Pred->getState(); }
 
 그리고는 주석 `[5]`에서 `stateNotZero`가 False라면 주석 `[6]`의 `reportbug` 메소드를 호출한다.
 
+(custom checker 제작은 다음 포스팅에 공개한다.)
 
 ### 결론?
 
-static analyzer를 통해서 0day 취약점을 찾을 수는 있다. 하지만 많은 배경지식을 요구한다. symbolic execution과 taint analyze는 기본적인 프로그램 분석 기술이라 다양한 곳에 적용 가능 해 배워둘 가치가 충분히 있다.
+static analyzer를 통해서 0day 취약점을 찾을 수는 있다. symbolic execution과 taint analyze는 기본적인 프로그램 분석 기술이라 다양한 곳에 적용 가능 해 배워둘 가치가 충분히 있다.
 
 하지만, clang static analyzer를 사용하기 위해서는 AST Node Class와 clang에서 구현한 symbolic execution 메소드의 사용법을 익혀야 한다.  이를 위해 여러 checker examples이 존재하지만, 너무 복잡하다.
 
 개인 취향의 문제이긴 하지만, 공부용 외에는 clang static analyzer를 실제로 0day bug hunting에 사용하진 않을 것 같다. (1줄 요약 : 배보다 배꼽이 더 큰 거 같다.)
-
-
 
 ### Reference
 - [https://chromium.googlesource.com/chromium/src.git/+/master/docs/clang_static_analyzer.md](https://chromium.googlesource.com/chromium/src.git/+/master/docs/clang_static_analyzer.md)
