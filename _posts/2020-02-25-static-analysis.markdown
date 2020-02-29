@@ -213,7 +213,7 @@ void DivZeroChecker::checkPreStmt(const BinaryOperator *B,
     return;
   }
 
-  bool TaintedD = isTainted(C.getState(), *DV);
+  bool TaintedD = isTainted(C.getState(), *DV); //[7]
   if ((stateNotZero && stateZero && TaintedD)) {
     reportBug("Division by a tainted value, possibly zero", stateZero, C,
               std::make_unique<taint::TaintBugVisitor>(*DV));
@@ -276,13 +276,68 @@ const ProgramStateRef &getState() const { return Pred->getState(); }
 
 그리고는 주석 `[5]`에서 `stateNotZero`가 False라면 주석 `[6]`의 `reportbug` 메소드를 호출한다.
 
-(custom checker 제작은 다음 포스팅에 공개한다.)
+그리고 이제 중요한! 주석 `[7]`을 보자. checker를 분석하기 전, `a/y` statement로 변경했을 때 division by zero checker가 동작하지 않은걸 확인 했었다. 다음 코드가 될 것이다.
+
+```c++
+#include <stdio.h>
+
+void vuln1(int y)
+{
+   int a = 10;
+   a/y;
+}
+
+int main(int argc, char *argv[])
+{
+   int y;
+   scanf("%d", &y);
+   vuln1(y);
+}
+```
+
+주석 `[7]`을 보면 위 코드에서 발생 가능한 취약점을 찾았어야 했다. 하지만 처음 `scan-build`를 사용 했을땐 찾지 못했다. 이유는 바로 taint 기능 관련 옵션이 기본적으로 disable이기 때문이다. 
+
+다음과 같이 taint 기능을 enable 시켜주면 위 코드에서도 취약점을 찾아낸다.
+
+```plaintext
+singi@singi-VirtualBox:~/sa$ scan-build-9 -o test2 -enable-checker alpha.security.taint.TaintPropagation make
+scan-build: Using '/usr/lib/llvm-9/bin/clang' for static analysis
+/usr/share/clang/scan-build-9/bin/../libexec/ccc-analyzer -O0 -g -o test test.c
+test.c:6:5: warning: Division by a tainted value, possibly zero
+   a/y;
+   ~^~
+1 warning generated.
+scan-build: 1 bug found.
+scan-build: Run 'scan-view /home/singi/sa/test2/2020-02-29-093911-12385-1' to examine bug reports.
+```
+
+하지만, 다음과 같은 상황에서는 이 taint 또한 제대로 동작하지 않는다.
+
+```c++
+#include <stdio.h>
+#include <stdlib.h>
+
+void vuln1(int y)
+{
+   int a = 10;
+   a/y;
+}
+
+int main(int argc, char *argv[])
+{
+   int y;
+   //y = strtoul(argv[1], NULL, 10);
+   y = atoi(argv[1]);
+   vuln1(y);
+}
+```
+위의 경우에도 division by zero가 존재하지만, 기본 checker로는 찾아낼 수 없다. 위와 같은 경우를 찾아내기 위해서는 custom checker를 제작할 때 y에 대입한 우변값을 일일히 추적 해 주어야 한다.
 
 ### 결론?
 
 static analyzer를 통해서 0day 취약점을 찾을 수는 있다. symbolic execution과 taint analyze는 기본적인 프로그램 분석 기술이라 다양한 곳에 적용 가능 해 배워둘 가치가 충분히 있다.
 
-하지만, clang static analyzer를 사용하기 위해서는 AST Node Class와 clang에서 구현한 symbolic execution 메소드의 사용법을 익혀야 한다.  이를 위해 여러 checker examples이 존재하지만, 너무 복잡하다.
+하지만, clang static analyzer를 사용하기 위해서는 AST Node Class와 clang에서 구현한 symbolic execution 메소드의 사용법을 익혀야 한다. 이를 위해 여러 checker examples이 존재하지만, 너무 복잡하다. 그리고 taint 구현이 완벽하지 않다.
 
 개인 취향의 문제이긴 하지만, 공부용 외에는 clang static analyzer를 실제로 0day bug hunting에 사용하진 않을 것 같다. (1줄 요약 : 배보다 배꼽이 더 큰 거 같다.)
 
