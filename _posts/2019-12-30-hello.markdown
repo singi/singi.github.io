@@ -1,8 +1,0 @@
----
-layout: post
-title:  "wtf"
-date:   2019-12-30 23:42:12 +0900
-categories: test new one
----
-
-huh?
